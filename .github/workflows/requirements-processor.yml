@@ -362,8 +362,8 @@ jobs:
           
           config_file = 'docs/config.json'
           issue_folder = '$ISSUE_FOLDER'
-          issue_number = '${{ steps.issue-details.outputs.number }}'
-          issue_title = '${{ steps.issue-details.outputs.title }}'
+          issue_number = '${{ steps.issue-details.outputs.number }}' or '0'
+          issue_title = '${{ steps.issue-details.outputs.title }}' or 'Unknown Issue'
           
           # Read existing config
           with open(config_file, 'r') as f:
@@ -372,12 +372,12 @@ jobs:
           # Add new folder if not exists
           folder_info = {
               'path': issue_folder,
-              'issue_number': int(issue_number),
+              'issue_number': int(issue_number) if issue_number.isdigit() else 0,
               'title': issue_title,
-              'created': '${{ steps.issue-details.outputs.created_at }}',
-              'updated': '${{ steps.issue-details.outputs.updated_at }}',
+              'created': '${{ steps.issue-details.outputs.created_at }}' or 'Unknown',
+              'updated': '${{ steps.issue-details.outputs.updated_at }}' or 'Unknown',
               'requirements_count': len(json.loads('''$JSON_DATA''').get('requirements', [])),
-              'slug': '${{ steps.issue-details.outputs.slug }}'
+              'slug': '${{ steps.issue-details.outputs.slug }}' or 'unknown'
           }
           
           # Check if folder already exists
@@ -385,7 +385,7 @@ jobs:
           folder_exists = False
           
           for folder in existing_folders:
-              if folder['issue_number'] == int(issue_number):
+              if folder['issue_number'] == folder_info['issue_number']:
                   folder.update(folder_info)
                   folder_exists = True
                   break
