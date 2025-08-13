@@ -100,6 +100,18 @@ jobs:
             console.log('Extracted data:', JSON.stringify(result, null, 2));
             return result;
             
+      - name: 'Debug Issue Data'
+        run: |
+          echo "=== DEBUG: Issue Data ==="
+          echo "Issue Number: '${{ steps.issue-details.outputs.number }}'"
+          echo "Issue Title: '${{ steps.issue-details.outputs.title }}'"
+          echo "Issue Body: '${{ steps.issue-details.outputs.body }}'"
+          echo "Issue Labels: '${{ steps.issue-details.outputs.labels }}'"
+          echo "Issue Slug: '${{ steps.issue-details.outputs.slug }}'"
+          echo "Issue Created: '${{ steps.issue-details.outputs.created_at }}'"
+          echo "Issue Updated: '${{ steps.issue-details.outputs.updated_at }}'"
+          echo "========================="
+            
       - name: 'Create requirements folder structure'
         run: |
           ISSUE_NUMBER="${{ steps.issue-details.outputs.number }}"
@@ -204,13 +216,19 @@ jobs:
               data = json.loads('''$JSON_DATA''')
               issue_folder = '$ISSUE_FOLDER'
               
+              # Get issue details from environment or use defaults
+              issue_number = '${{ steps.issue-details.outputs.number }}' or 'Unknown'
+              issue_title = '${{ steps.issue-details.outputs.title }}' or 'No Title'
+              issue_created = '${{ steps.issue-details.outputs.created_at }}' or 'Unknown'
+              issue_updated = '${{ steps.issue-details.outputs.updated_at }}' or 'Unknown'
+              
               # Create README for the issue
               readme_content = f'''# Issue {data.get('issue_summary', 'Requirements')}
               
-              **Issue Number:** ${{ steps.issue-details.outputs.number }}
-              **Title:** ${{ steps.issue-details.outputs.title }}
-              **Created:** ${{ steps.issue-details.outputs.created_at }}
-              **Updated:** ${{ steps.issue-details.outputs.updated_at }}
+              **Issue Number:** {issue_number}
+              **Title:** {issue_title}
+              **Created:** {issue_created}
+              **Updated:** {issue_updated}
               
               ## Summary
               {data.get('issue_summary', 'No summary provided')}
@@ -222,7 +240,8 @@ jobs:
               
               for req in data.get('requirements', []):
                   req_id = req.get('id', 'UNKNOWN')
-                  readme_content += f'- [{req_id}]({req_id}.md) - {req.get('title', 'Untitled')}\n'
+                  req_title = req.get('title', 'Untitled')
+                  readme_content += f'- [{req_id}]({req_id}.md) - {req_title}\\n'
               
               readme_content += '''
               
@@ -267,25 +286,25 @@ jobs:
                   '''
                   
                   for criterion in req.get('acceptance_criteria', []):
-                      req_content += f'- [ ] {criterion}\n'
+                      req_content += f'- [ ] {criterion}\\n'
                   
-                  req_content += f'''
+                  req_content += '''
                   
                   ## Dependencies
                   '''
                   
                   for dep in req.get('dependencies', []):
-                      req_content += f'- {dep}\n'
+                      req_content += f'- {dep}\\n'
                   
-                  req_content += f'''
+                  req_content += '''
                   
                   ## Stakeholders
                   '''
                   
                   for stakeholder in req.get('stakeholders', []):
-                      req_content += f'- {stakeholder}\n'
+                      req_content += f'- {stakeholder}\\n'
                   
-                  req_content += f'''
+                  req_content += '''
                   
                   ## Tags
                   '''
@@ -293,7 +312,7 @@ jobs:
                   for tag in req.get('tags', []):
                       req_content += f'`{tag}` '
                   
-                  req_content += f'''
+                  req_content += '''
                   
                   ## Notes
                   {req.get('notes', 'No additional notes')}
@@ -311,6 +330,8 @@ jobs:
               
           except Exception as e:
               print(f'Error processing requirements: {e}')
+              import traceback
+              traceback.print_exc()
               exit(1)
           "
           
