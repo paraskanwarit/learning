@@ -41,11 +41,15 @@ jobs:
         with:
           script: |
             const issueNumber = '${{ github.event.inputs.issue_number || github.event.issue.number }}';
+            console.log('Processing issue number:', issueNumber);
+            
             const { data: issue } = await github.rest.issues.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: parseInt(issueNumber)
             });
+            
+            console.log('Issue data:', JSON.stringify(issue, null, 2));
             
             // Get issue attachments (comments with files)
             const { data: comments } = await github.rest.issues.listComments({
@@ -81,10 +85,10 @@ jobs:
               .replace(/\s+/g, '-')
               .substring(0, 50);
             
-            return {
+            const result = {
               number: issue.number,
               title: issue.title,
-              body: issue.body,
+              body: issue.body || '',
               slug: slug,
               attachments: JSON.stringify(attachments),
               labels: JSON.stringify(issue.labels.map(l => l.name)),
@@ -92,6 +96,9 @@ jobs:
               created_at: issue.created_at,
               updated_at: issue.updated_at
             };
+            
+            console.log('Extracted data:', JSON.stringify(result, null, 2));
+            return result;
             
       - name: 'Create requirements folder structure'
         run: |
@@ -125,6 +132,8 @@ jobs:
             Labels: ${{ steps.issue-details.outputs.labels }}
             Attachments: ${{ steps.issue-details.outputs.attachments }}
             
+            IMPORTANT: If any of the above fields are empty or missing, please analyze what information is available and provide a helpful response.
+            
             Please provide a structured analysis in JSON format with the following structure:
             {
               "issue_summary": "Brief summary of the issue",
@@ -156,6 +165,8 @@ jobs:
             2. Clearly defined with acceptance criteria
             3. Properly categorized and prioritized
             4. Linked to relevant stakeholders and dependencies
+            
+            If the issue data is incomplete, make reasonable assumptions and note them in the metadata.
           settings: |
             {
               "model": "gemini-2.5-flash",
