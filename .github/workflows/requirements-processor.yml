@@ -3,6 +3,8 @@ name: 'Requirements Processor'
 on:
   issues:
     types: [opened, edited, reopened]
+  issue_comment:
+    types: [created, edited]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -18,6 +20,14 @@ permissions:
 
 jobs:
   process-requirements:
+    # Run if:
+    # 1. Issue was created/edited (automatic)
+    # 2. Comment mentions @gemini-cli (on-demand)
+    # 3. Manually dispatched
+    if: |
+      github.event_name == 'issues' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@gemini-cli'))
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout code'
@@ -40,7 +50,16 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const issueNumber = '${{ github.event.inputs.issue_number || github.event.issue.number }}';
+            // Get issue number from different event types
+            let issueNumber;
+            if (context.eventName === 'workflow_dispatch') {
+              issueNumber = '${{ github.event.inputs.issue_number }}';
+            } else if (context.eventName === 'issues') {
+              issueNumber = context.payload.issue.number;
+            } else if (context.eventName === 'issue_comment') {
+              issueNumber = context.payload.issue.number;
+            }
+            
             console.log('Processing issue number:', issueNumber);
             console.log('GitHub event:', JSON.stringify(github.event, null, 2));
             
