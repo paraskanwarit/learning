@@ -41,6 +41,10 @@ jobs:
       - name: 'Generate design synthesis'
         id: design-gen
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a software architect. Based on the requirements in this repository, generate a high-level design synthesis.
@@ -126,6 +130,10 @@ jobs:
       - name: 'Generate architecture stubs'
         id: arch-gen
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a software architect. Generate code stubs and configuration files based on the requirements.
@@ -208,6 +216,10 @@ jobs:
       - name: 'Generate test scaffolds'
         id: test-gen
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a QA engineer. Generate comprehensive test scaffolds based on the requirements.
@@ -290,6 +302,10 @@ jobs:
       - name: 'Generate traceability matrices'
         id: trace-gen
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a requirements engineer. Generate traceability matrices based on the requirements.

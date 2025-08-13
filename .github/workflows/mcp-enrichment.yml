@@ -84,6 +84,10 @@ jobs:
         if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'domain_ontology'
         id: domain-enrichment
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a domain ontology expert. Analyze these requirements and provide domain-specific enrichment.
@@ -138,6 +142,10 @@ jobs:
         if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'regulatory_compliance'
         id: regulatory-enrichment
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a regulatory compliance expert. Analyze these requirements for compliance implications.
@@ -188,6 +196,10 @@ jobs:
         if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'traceability'
         id: traceability-enrichment
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a traceability expert. Analyze these requirements for traceability relationships.
@@ -241,6 +253,10 @@ jobs:
         if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'impact_analysis'
         id: impact-enrichment
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are an impact analysis expert. Analyze these requirements for business and technical impact.

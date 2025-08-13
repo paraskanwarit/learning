@@ -155,6 +155,10 @@ jobs:
       - name: 'Process requirements with Gemini CLI (Vertex AI)'
         id: gemini-processing
         uses: google-github-actions/run-gemini-cli@v0.1.10
+        env:
+          GOOGLE_GENAI_USE_VERTEXAI: true
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION }}
         with:
           prompt: |
             You are a requirements engineering expert. Analyze this GitHub issue and decompose it into atomic, traceable requirements.
