@@ -1,0 +1,75 @@
+name: 'Test Gemini CLI Action'
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/*.yml']
+
+permissions:
+  contents: read
+  id-token: write  # Required for Workload Identity Federation
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        
+      - name: 'Test basic functionality'
+        id: test-basic
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a helpful AI assistant. Please provide a brief summary of what you can do and respond with "Action test successful!" if you're working correctly.
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 500
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          
+      - name: 'Display output'
+        run: |
+          echo "Gemini CLI Action Test Results:"
+          echo "Summary: ${{ steps.test-basic.outputs.summary }}"
+          
+          if [[ "${{ steps.test-basic.outputs.summary }}" == *"Action test successful"* ]]; then
+            echo "✅ Test passed! Action is working correctly."
+          else
+            echo "❌ Test failed. Action output: ${{ steps.test-basic.outputs.summary }}"
+            exit 1
+          fi
+          
+      - name: 'Test with custom settings'
+        id: test-settings
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: "Generate a simple Python function that calculates the factorial of a number."
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.2,
+              "max_tokens": 1000
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          
+      - name: 'Display code generation test'
+        run: |
+          echo "Code Generation Test Results:"
+          echo "Generated code: ${{ steps.test-settings.outputs.summary }}"
+          
+          if [[ "${{ steps.test-settings.outputs.summary }}" == *"def"* ]] || [[ "${{ steps.test-settings.outputs.summary }}" == *"function"* ]]; then
+            echo "✅ Code generation test passed!"
+          else
+            echo "❌ Code generation test failed."
+            exit 1
+          fi 

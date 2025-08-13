@@ -1,0 +1,68 @@
+{
+  "name": "gemini-cli-workflows",
+  "version": "1.0.0",
+  "description": "Production-grade GitHub Action workflows using the official Google Gemini CLI action with Workload Identity Federation",
+  "main": "README.md",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "validate": "yamllint .github/workflows/*.yml",
+    "lint": "yamllint .github/workflows/*.yml",
+    "build": "echo \"No build step required for workflow templates\"",
+    "release": "gh release create v$npm_package_version --title \"Release v$npm_package_version\" --notes \"Release v$npm_package_version\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/gemini-cli-workflows.git"
+  },
+  "keywords": [
+    "github-actions",
+    "gemini",
+    "ai",
+    "code-review",
+    "issue-triage",
+    "automation",
+    "devops",
+    "ci-cd",
+    "workload-identity",
+    "google-cloud"
+  ],
+  "author": "Your Organization",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/your-org/gemini-cli-workflows/issues"
+  },
+  "homepage": "https://github.com/your-org/gemini-cli-workflows#readme",
+  "devDependencies": {
+    "yamllint": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {},
+  "peerDependencies": {},
+  "optionalDependencies": {},
+  "bundledDependencies": [],
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "overrides": {},
+  "resolutions": {},
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    ".github/workflows/*.yml",
+    "README.md",
+    "GEMINI.md",
+    "SECURITY.md",
+    "DEPLOYMENT.md",
+    "QUICKSTART.md",
+    "examples/*.yml"
+  ]
+} 

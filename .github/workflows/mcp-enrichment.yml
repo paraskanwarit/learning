@@ -1,0 +1,525 @@
+name: 'MCP Requirements Enrichment'
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to enrich'
+        required: true
+        type: string
+      enrichment_type:
+        description: 'Type of enrichment to perform'
+        required: true
+        type: choice
+        options:
+          - all
+          - domain_ontology
+          - regulatory_compliance
+          - traceability
+          - impact_analysis
+
+permissions:
+  contents: write
+  issues: write
+  id-token: write
+
+jobs:
+  enrich-requirements:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 'Install MCP dependencies'
+        run: |
+          pip install PyGithub requests python-dateutil
+          
+      - name: 'Load MCP configuration'
+        id: mcp-config
+        run: |
+          # Load .gemini/settings.json for MCP server configurations
+          if [ -f ".gemini/settings.json" ]; then
+            echo "MCP configuration loaded"
+          else
+            echo "No MCP configuration found, using defaults"
+          fi
+          
+      - name: 'Get requirements data'
+        id: requirements-data
+        run: |
+          ISSUE_NUMBER="${{ github.event.inputs.issue_number }}"
+          
+          # Find the requirements-analysis.json file for this issue
+          ANALYSIS_FILE=$(find docs/requirements -name "requirements-analysis.json" -exec grep -l "\"issue_number\": $ISSUE_NUMBER" {} \;)
+          
+          if [ -z "$ANALYSIS_FILE" ]; then
+            echo "Error: No requirements analysis found for issue #$ISSUE_NUMBER"
+            exit 1
+          fi
+          
+          echo "ANALYSIS_FILE=$ANALYSIS_FILE" >> $GITHUB_ENV
+          echo "ISSUE_FOLDER=$(dirname "$ANALYSIS_FILE")" >> $GITHUB_ENV
+          
+          # Load the requirements data
+          python -c "
+          import json
+          import os
+          
+          with open('$ANALYSIS_FILE', 'r') as f:
+              data = json.load(f)
+          
+          print(f'REQUIREMENTS_COUNT={len(data.get(\"requirements\", []))}')
+          print(f'REQUIREMENTS_DATA={json.dumps(data)}')
+          "
+          
+      - name: 'Domain Ontology Enrichment'
+        if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'domain_ontology'
+        id: domain-enrichment
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a domain ontology expert. Analyze these requirements and provide domain-specific enrichment.
+            
+            Requirements: ${{ steps.requirements-data.outputs.REQUIREMENTS_DATA }}
+            
+            Provide enrichment in JSON format:
+            {
+              "domain_entities": [
+                {
+                  "name": "entity_name",
+                  "type": "business_object|process|rule|concept",
+                  "description": "Domain-specific description",
+                  "relationships": ["related_entity1", "related_entity2"],
+                  "business_rules": ["rule1", "rule2"],
+                  "domain_vocabulary": ["term1", "term2"]
+                }
+              ],
+              "business_processes": [
+                {
+                  "name": "process_name",
+                  "description": "Process description",
+                  "steps": ["step1", "step2"],
+                  "stakeholders": ["stakeholder1", "stakeholder2"],
+                  "inputs": ["input1", "input2"],
+                  "outputs": ["output1", "output2"]
+                }
+              ],
+              "domain_constraints": [
+                {
+                  "type": "business_rule|regulatory|technical",
+                  "description": "Constraint description",
+                  "impact": "high|medium|low",
+                  "mitigation": "Mitigation strategy"
+                }
+              ]
+            }
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 6000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Regulatory Compliance Enrichment'
+        if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'regulatory_compliance'
+        id: regulatory-enrichment
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a regulatory compliance expert. Analyze these requirements for compliance implications.
+            
+            Requirements: ${{ steps.requirements-data.outputs.REQUIREMENTS_DATA }}
+            
+            Provide compliance analysis in JSON format:
+            {
+              "applicable_regulations": [
+                {
+                  "name": "regulation_name",
+                  "jurisdiction": "global|eu|us|uk|other",
+                  "description": "Regulation description",
+                  "requirements": ["req1", "req2"],
+                  "compliance_level": "required|recommended|optional",
+                  "risk_level": "high|medium|low"
+                }
+              ],
+              "compliance_requirements": [
+                {
+                  "type": "data_protection|security|audit|reporting",
+                  "description": "Compliance requirement",
+                  "implementation": "Implementation guidance",
+                  "verification": "How to verify compliance",
+                  "deadlines": "Compliance deadlines"
+                }
+              ],
+              "risk_assessment": {
+                "overall_risk": "high|medium|low",
+                "risk_factors": ["factor1", "factor2"],
+                "mitigation_strategies": ["strategy1", "strategy2"]
+              }
+            }
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 6000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Traceability Links Enrichment'
+        if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'traceability'
+        id: traceability-enrichment
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a traceability expert. Analyze these requirements for traceability relationships.
+            
+            Requirements: ${{ steps.requirements-data.outputs.REQUIREMENTS_DATA }}
+            
+            Provide traceability analysis in JSON format:
+            {
+              "upstream_traceability": [
+                {
+                  "requirement_id": "RQ-ISSUE-X-001",
+                  "business_objectives": ["objective1", "objective2"],
+                  "stakeholder_needs": ["need1", "need2"],
+                  "regulatory_drivers": ["driver1", "driver2"],
+                  "business_processes": ["process1", "process2"]
+                }
+              ],
+              "downstream_traceability": [
+                {
+                  "requirement_id": "RQ-ISSUE-X-001",
+                  "design_artifacts": ["artifact1", "artifact2"],
+                  "test_cases": ["test1", "test2"],
+                  "implementation_components": ["component1", "component2"],
+                  "deployment_artifacts": ["artifact1", "artifact2"]
+                }
+              ],
+              "cross_references": [
+                {
+                  "source_requirement": "RQ-ISSUE-X-001",
+                  "target_requirement": "RQ-ISSUE-X-002",
+                  "relationship_type": "depends_on|implements|conflicts_with|enhances",
+                  "description": "Relationship description",
+                  "impact": "high|medium|low"
+                }
+              ]
+            }
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 6000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Impact Analysis Enrichment'
+        if: github.event.inputs.enrichment_type == 'all' || github.event.inputs.enrichment_type == 'impact_analysis'
+        id: impact-enrichment
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are an impact analysis expert. Analyze these requirements for business and technical impact.
+            
+            Requirements: ${{ steps.requirements-data.outputs.REQUIREMENTS_DATA }}
+            
+            Provide impact analysis in JSON format:
+            {
+              "business_impact": [
+                {
+                  "requirement_id": "RQ-ISSUE-X-001",
+                  "customer_impact": "high|medium|low",
+                  "revenue_impact": "high|medium|low",
+                  "operational_impact": "high|medium|low",
+                  "competitive_advantage": "high|medium|low",
+                  "time_to_market": "accelerated|normal|delayed"
+                }
+              ],
+              "technical_impact": [
+                {
+                  "requirement_id": "RQ-ISSUE-X-001",
+                  "architecture_changes": "major|minor|none",
+                  "infrastructure_requirements": "high|medium|low",
+                  "integration_complexity": "high|medium|low",
+                  "performance_impact": "high|medium|low",
+                  "security_implications": "high|medium|low"
+                }
+              ],
+              "resource_impact": [
+                {
+                  "requirement_id": "RQ-ISSUE-X-001",
+                  "development_effort": "high|medium|low",
+                  "testing_effort": "high|medium|low",
+                  "deployment_effort": "high|medium|low",
+                  "maintenance_effort": "high|medium|low",
+                  "estimated_cost": "high|medium|low"
+                }
+              ]
+            }
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 6000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Integrate enrichment data'
+        id: integration
+        run: |
+          # Combine all enrichment outputs
+          python -c "
+          import json
+          import os
+          
+          enrichment_data = {}
+          
+          # Add domain ontology enrichment
+          if '${{ github.event.inputs.enrichment_type }}' in ['all', 'domain_ontology']:
+              try:
+                  domain_output = '''${{ steps.domain-enrichment.outputs.summary }}'''
+                  if domain_output and '{' in domain_output:
+                      start = domain_output.find('{')
+                      end = domain_output.rfind('}') + 1
+                      domain_json = domain_output[start:end]
+                      enrichment_data['domain_ontology'] = json.loads(domain_json)
+                  except:
+                      pass
+          
+          # Add regulatory compliance enrichment
+          if '${{ github.event.inputs.enrichment_type }}' in ['all', 'regulatory_compliance']:
+              try:
+                  regulatory_output = '''${{ steps.regulatory-enrichment.outputs.summary }}'''
+                  if regulatory_output and '{' in regulatory_output:
+                      start = regulatory_output.find('{')
+                      end = regulatory_output.rfind('}') + 1
+                      regulatory_json = regulatory_output[start:end]
+                      enrichment_data['regulatory_compliance'] = json.loads(regulatory_json)
+                  except:
+                      pass
+          
+          # Add traceability enrichment
+          if '${{ github.event.inputs.enrichment_type }}' in ['all', 'traceability']:
+              try:
+                  traceability_output = '''${{ steps.traceability-enrichment.outputs.summary }}'''
+                  if traceability_output and '{' in traceability_output:
+                      start = traceability_output.find('{')
+                      end = traceability_output.rfind('}') + 1
+                      traceability_json = traceability_output[start:end]
+                      enrichment_data['traceability'] = json.loads(traceability_json)
+                  except:
+                      pass
+          
+          # Add impact analysis enrichment
+          if '${{ github.event.inputs.enrichment_type }}' in ['all', 'impact_analysis']:
+              try:
+                  impact_output = '''${{ steps.impact-enrichment.outputs.summary }}'''
+                  if impact_output and '{' in impact_output:
+                      start = impact_output.find('{')
+                      end = impact_output.rfind('}') + 1
+                      impact_json = impact_output[start:end]
+                      enrichment_data['impact_analysis'] = json.loads(impact_json)
+                  except:
+                      pass
+          
+          # Save enrichment data
+          with open('${{ env.ISSUE_FOLDER }}/enrichment-data.json', 'w') as f:
+              json.dump(enrichment_data, f, indent=2)
+          
+          # Update main requirements analysis
+          analysis_file = '${{ env.ANALYSIS_FILE }}'
+          with open(analysis_file, 'r') as f:
+              analysis_data = json.load(f)
+          
+          analysis_data['enrichment'] = enrichment_data
+          analysis_data['enrichment_timestamp'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          
+          with open(analysis_file, 'w') as f:
+              json.dump(analysis_data, f, indent=2)
+          
+          print(f'Enrichment data integrated successfully')
+          "
+          
+      - name: 'Generate enriched requirement files'
+        id: file-update
+        run: |
+          # Update individual requirement files with enrichment data
+          python -c "
+          import json
+          import os
+          
+          # Load enrichment data
+          enrichment_file = '${{ env.ISSUE_FOLDER }}/enrichment-data.json'
+          if os.path.exists(enrichment_file):
+              with open(enrichment_file, 'r') as f:
+                  enrichment_data = json.load(f)
+              
+              # Update each requirement file
+              requirements_folder = '${{ env.ISSUE_FOLDER }}'
+              for root, dirs, files in os.walk(requirements_folder):
+                  for file in files:
+                      if file.endswith('.md') and file.startswith('RQ-'):
+                          file_path = os.path.join(root, file)
+                          
+                          # Read existing content
+                          with open(file_path, 'r') as f:
+                              content = f.read()
+                          
+                          # Add enrichment sections
+                          enrichment_content = '\n\n## Enrichment Data\n\n'
+                          
+                          if 'domain_ontology' in enrichment_data:
+                              enrichment_content += '### Domain Ontology\n'
+                              domain = enrichment_data['domain_ontology']
+                              if 'domain_entities' in domain:
+                                  enrichment_content += '**Domain Entities:**\n'
+                                  for entity in domain['domain_entities']:
+                                      enrichment_content += f'- {entity[\"name\"]}: {entity[\"description\"]}\n'
+                              enrichment_content += '\n'
+                          
+                          if 'regulatory_compliance' in enrichment_data:
+                              enrichment_content += '### Regulatory Compliance\n'
+                              regulatory = enrichment_data['regulatory_compliance']
+                              if 'applicable_regulations' in regulatory:
+                                  enrichment_content += '**Applicable Regulations:**\n'
+                                  for reg in regulatory['applicable_regulations']:
+                                      enrichment_content += f'- {reg[\"name\"]} ({reg[\"jurisdiction\"]}): {reg[\"description\"]}\n'
+                              enrichment_content += '\n'
+                          
+                          if 'traceability' in enrichment_data:
+                              enrichment_content += '### Traceability\n'
+                              traceability = enrichment_data['traceability']
+                              if 'cross_references' in traceability:
+                                  enrichment_content += '**Cross References:**\n'
+                                  for ref in traceability['cross_references']:
+                                      enrichment_content += f'- {ref[\"source_requirement\"]} → {ref[\"target_requirement\"]}: {ref[\"relationship_type\"]}\n'
+                              enrichment_content += '\n'
+                          
+                          if 'impact_analysis' in enrichment_data:
+                              enrichment_content += '### Impact Analysis\n'
+                              impact = enrichment_data['impact_analysis']
+                              if 'business_impact' in impact:
+                                  enrichment_content += '**Business Impact:**\n'
+                                  for imp in impact['business_impact']:
+                                      enrichment_content += f'- Customer Impact: {imp[\"customer_impact\"]}\n'
+                                      enrichment_content += f'- Revenue Impact: {imp[\"revenue_impact\"]}\n'
+                              enrichment_content += '\n'
+                          
+                          enrichment_content += '---\n*Enriched by Gemini CLI using Vertex AI*\n'
+                          
+                          # Append enrichment content
+                          with open(file_path, 'a') as f:
+                              f.write(enrichment_content)
+                          
+                          print(f'Updated: {file_path}')
+          "
+          
+      - name: 'Update configuration'
+        id: config-update
+        run: |
+          # Mark requirements as enriched in config
+          python -c "
+          import json
+          import os
+          
+          config_file = 'docs/config.json'
+          issue_number = '${{ github.event.inputs.issue_number }}'
+          
+          with open(config_file, 'r') as f:
+              config = json.load(f)
+          
+          # Find and update the issue folder
+          for folder in config['requirements']['folders']:
+              if folder['issue_number'] == int(issue_number):
+                  folder['enriched'] = True
+                  folder['enrichment_timestamp'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+                  folder['enrichment_types'] = ['${{ github.event.inputs.enrichment_type }}']
+                  break
+          
+          # Update timestamp
+          config['requirements']['last_updated'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          
+          with open(config_file, 'w') as f:
+              json.dump(config, f, indent=2)
+          
+          print('Configuration updated successfully')
+          "
+          
+      - name: 'Commit and push changes'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add .
+          git commit -m "Enrich requirements for Issue #${{ github.event.inputs.issue_number }} with ${{ github.event.inputs.enrichment_type }} enrichment (Vertex AI)"
+          git push
+          
+      - name: 'Create enrichment summary'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = '${{ github.event.inputs.issue_number }}';
+            const enrichmentType = '${{ github.event.inputs.enrichment_type }}';
+            
+            await github.rest.issues.createComment({
+              issue_number: parseInt(issueNumber),
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔍 Requirements Enrichment Complete (Vertex AI)
+              
+              **Issue:** #${issueNumber}
+              **Enrichment Type:** ${enrichmentType}
+              **Status:** ✅ Complete
+              
+              ### What was enriched:
+              - 📊 **Domain Ontology:** Business entities, processes, and constraints
+              - 📋 **Regulatory Compliance:** Applicable regulations and requirements
+              - 🔗 **Traceability:** Upstream/downstream relationships and cross-references
+              - 📈 **Impact Analysis:** Business, technical, and resource impact assessment
+              
+              ### Files updated:
+              - \`${{ env.ISSUE_FOLDER }}/enrichment-data.json\`
+              - \`${{ env.ISSUE_FOLDER }}/requirements-analysis.json\`
+              - Individual requirement markdown files
+              - \`docs/config.json\`
+              
+              ### Next steps:
+              1. Review the enrichment data for accuracy
+              2. Validate regulatory compliance requirements
+              3. Verify traceability relationships
+              4. Assess impact analysis results
+              5. Use enriched data for downstream pipeline generation
+              
+              ---
+              *Enriched automatically by Gemini CLI using Vertex AI via MCP integration*
+              `
+            }); 

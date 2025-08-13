@@ -1,0 +1,63 @@
+{
+  "requirements": {
+    "root": "docs/requirements",
+    "folders": [],
+    "last_updated": "2025-01-27T00:00:00Z",
+    "metadata": {
+      "version": "1.0.0",
+      "description": "Requirements management configuration for automated processing",
+      "generator": "Gemini CLI Requirements Processor"
+    },
+    "settings": {
+      "auto_process": true,
+      "enrichment_enabled": true,
+      "mcp_integration": true,
+      "default_models": {
+        "requirements": "gemini-1.5-pro",
+        "enrichment": "gemini-1.5-pro"
+      }
+    }
+  },
+  "navigation": {
+    "structure": [
+      {
+        "type": "functional",
+        "description": "Functional requirements",
+        "icon": "⚙️"
+      },
+      {
+        "type": "non-functional",
+        "description": "Non-functional requirements",
+        "icon": "📊"
+      },
+      {
+        "type": "constraints",
+        "description": "System constraints",
+        "icon": "🚫"
+      },
+      {
+        "type": "enrichment",
+        "description": "Enriched data and analysis",
+        "icon": "🔍"
+      }
+    ]
+  },
+  "templates": {
+    "requirement": {
+      "sections": [
+        "description",
+        "acceptance_criteria",
+        "dependencies",
+        "stakeholders",
+        "tags",
+        "notes"
+      ],
+      "metadata_fields": [
+        "type",
+        "priority",
+        "complexity",
+        "id"
+      ]
+    }
+  }
+} 

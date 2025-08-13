@@ -1,0 +1,465 @@
+name: 'Downstream Pipeline Generation'
+
+on:
+  push:
+    paths:
+      - 'docs/requirements/**/*.md'
+      - 'docs/config.json'
+  workflow_dispatch:
+    inputs:
+      trigger_type:
+        description: 'Type of pipeline to trigger'
+        required: true
+        type: choice
+        options:
+          - all
+          - design_synthesis
+          - architecture_stubs
+          - test_scaffolds
+          - traceability_matrices
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  design-synthesis:
+    if: github.event.inputs.trigger_type == 'all' || github.event.inputs.trigger_type == 'design_synthesis'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 'Generate design synthesis'
+        id: design-gen
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a software architect. Based on the requirements in this repository, generate a high-level design synthesis.
+            
+            Analyze the requirements and provide:
+            1. System architecture overview
+            2. Component design
+            3. Data flow diagrams
+            4. Integration patterns
+            5. Technology recommendations
+            
+            Focus on:
+            - Scalability and performance
+            - Security and compliance
+            - Maintainability and extensibility
+            - Integration with existing systems
+            
+            Provide the output in structured markdown format suitable for technical documentation.
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.2,
+              "max_tokens": 8000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Save design synthesis'
+        run: |
+          mkdir -p docs/design-synthesis
+          
+          # Extract markdown content from Gemini output
+          python -c "
+          output = '''${{ steps.design-gen.outputs.summary }}'
+          
+          # Find markdown content
+          if '#' in output:
+              start = output.find('#')
+              markdown_content = output[start:]
+          else:
+              markdown_content = '# Design Synthesis\n\n' + output
+          
+          # Add metadata
+          markdown_content = f'''# Design Synthesis
+          
+          **Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          **Model:** Gemini 1.5 Pro (Vertex AI)
+          **Trigger:** ${{ github.event_name }}
+          
+          ---
+          
+          {markdown_content}
+          
+          ---
+          *Generated automatically by Gemini CLI using Vertex AI*
+          '''
+          
+          with open('docs/design-synthesis/design-synthesis.md', 'w') as f:
+              f.write(markdown_content)
+          
+          print('Design synthesis saved')
+          "
+          
+  architecture-stubs:
+    if: github.event.inputs.trigger_type == 'all' || github.event.inputs.trigger_type == 'architecture_stubs'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 'Generate architecture stubs'
+        id: arch-gen
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a software architect. Generate code stubs and configuration files based on the requirements.
+            
+            Create:
+            1. Project structure recommendations
+            2. Code stubs for key components
+            3. Configuration file templates
+            4. Docker/container configurations
+            5. CI/CD pipeline configurations
+            
+            Focus on:
+            - Modern development practices
+            - Cloud-native architecture
+            - Security best practices
+            - Monitoring and observability
+            
+            Provide the output in structured markdown with code examples.
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.2,
+              "max_tokens": 8000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Save architecture stubs'
+        run: |
+          mkdir -p docs/architecture-stubs
+          
+          python -c "
+          output = '''${{ steps.arch-gen.outputs.summary }}'
+          
+          if '#' in output:
+              start = output.find('#')
+              markdown_content = output[start:]
+          else:
+              markdown_content = '# Architecture Stubs\n\n' + output
+          
+          markdown_content = f'''# Architecture Stubs
+          
+          **Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          **Model:** Gemini 1.5 Pro (Vertex AI)
+          **Trigger:** ${{ github.event_name }}
+          
+          ---
+          
+          {markdown_content}
+          
+          ---
+          *Generated automatically by Gemini CLI using Vertex AI*
+          '''
+          
+          with open('docs/architecture-stubs/architecture-stubs.md', 'w') as f:
+              f.write(markdown_content)
+          
+          print('Architecture stubs saved')
+          "
+          
+  test-scaffolds:
+    if: github.event.inputs.trigger_type == 'all' || github.event.inputs.trigger_type == 'test_scaffolds'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 'Generate test scaffolds'
+        id: test-gen
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a QA engineer. Generate comprehensive test scaffolds based on the requirements.
+            
+            Create:
+            1. Unit test frameworks
+            2. Integration test scenarios
+            3. Performance test plans
+            4. Security test checklists
+            5. User acceptance test cases
+            
+            Focus on:
+            - Test coverage completeness
+            - Automated testing strategies
+            - Performance and security testing
+            - Test data management
+            
+            Provide the output in structured markdown with test examples.
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.2,
+              "max_tokens": 8000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Save test scaffolds'
+        run: |
+          mkdir -p docs/test-scaffolds
+          
+          python -c "
+          output = '''${{ steps.test-gen.outputs.summary }}'
+          
+          if '#' in output:
+              start = output.find('#')
+              markdown_content = output[start:]
+          else:
+              markdown_content = '# Test Scaffolds\n\n' + output
+          
+          markdown_content = f'''# Test Scaffolds
+          
+          **Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          **Model:** Gemini 1.5 Pro (Vertex AI)
+          **Trigger:** ${{ github.event_name }}
+          
+          ---
+          
+          {markdown_content}
+          
+          ---
+          *Generated automatically by Gemini CLI using Vertex AI*
+          '''
+          
+          with open('docs/test-scaffolds/test-scaffolds.md', 'w') as f:
+              f.write(markdown_content)
+          
+          print('Test scaffolds saved')
+          "
+          
+  traceability-matrices:
+    if: github.event.inputs.trigger_type == 'all' || github.event.inputs.trigger_type == 'traceability_matrices'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 'Generate traceability matrices'
+        id: trace-gen
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a requirements engineer. Generate traceability matrices based on the requirements.
+            
+            Create:
+            1. Requirements to design traceability
+            2. Requirements to test traceability
+            3. Requirements to implementation traceability
+            4. Cross-requirement dependencies
+            5. Change impact analysis matrices
+            
+            Focus on:
+            - Complete traceability coverage
+            - Dependency mapping
+            - Change impact assessment
+            - Compliance verification
+            
+            Provide the output in structured markdown with matrix examples.
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 8000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Save traceability matrices'
+        run: |
+          mkdir -p docs/traceability-matrices
+          
+          python -c "
+          output = '''${{ steps.trace-gen.outputs.summary }}'
+          
+          if '#' in output:
+              start = output.find('#')
+              markdown_content = output[start:]
+          else:
+              markdown_content = '# Traceability Matrices\n\n' + output
+          
+          markdown_content = f'''# Traceability Matrices
+          
+          **Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          **Model:** Gemini 1.5 Pro (Vertex AI)
+          **Trigger:** ${{ github.event_name }}
+          
+          ---
+          
+          {markdown_content}
+          
+          ---
+          *Generated automatically by Gemini CLI using Vertex AI*
+          '''
+          
+          with open('docs/traceability-matrices/traceability-matrices.md', 'w') as f:
+              f.write(markdown_content)
+          
+          print('Traceability matrices saved')
+          "
+          
+  update-config:
+    needs: [design-synthesis, architecture-stubs, test-scaffolds, traceability-matrices]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 'Update configuration'
+        run: |
+          # Update docs/config.json with pipeline execution info
+          python -c "
+          import json
+          import os
+          
+          config_file = 'docs/config.json'
+          
+          if os.path.exists(config_file):
+              with open(config_file, 'r') as f:
+                  config = json.load(f)
+          else:
+              config = {'requirements': {'root': 'docs/requirements', 'folders': []}}
+          
+          # Add pipeline section if not exists
+          if 'pipelines' not in config:
+              config['pipelines'] = {}
+          
+          # Update pipeline execution info
+          config['pipelines']['last_execution'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          config['pipelines']['trigger_type'] = '${{ github.event.inputs.trigger_type || github.event_name }}'
+          config['pipelines']['artifacts'] = {
+              'design_synthesis': 'docs/design-synthesis/design-synthesis.md',
+              'architecture_stubs': 'docs/architecture-stubs/architecture-stubs.md',
+              'test_scaffolds': 'docs/test-scaffolds/test-scaffolds.md',
+              'traceability_matrices': 'docs/traceability-matrices/traceability-matrices.md'
+          }
+          
+          # Ensure docs directory exists
+          os.makedirs('docs', exist_ok=True)
+          
+          with open(config_file, 'w') as f:
+              json.dump(config, f, indent=2)
+          
+          print('Configuration updated with pipeline info')
+          "
+          
+      - name: 'Commit and push changes'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add .
+          git commit -m "Generate downstream pipeline artifacts (Vertex AI) - ${{ github.event.inputs.trigger_type || 'auto' }}"
+          git push
+          
+      - name: 'Create summary comment'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find the most recent open issue to comment on
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              sort: 'updated',
+              direction: 'desc',
+              per_page: 1
+            });
+            
+            if (issues.length > 0) {
+              const issue = issues[0];
+              const triggerType = '${{ github.event.inputs.trigger_type || 'automatic' }}';
+              
+              await github.rest.issues.createComment({
+                issue_number: issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🚀 Downstream Pipeline Generation Complete (Vertex AI)
+                
+                **Pipeline Type:** ${triggerType}
+                **Status:** ✅ Complete
+                
+                ### Generated Artifacts:
+                - 🏗️ **Design Synthesis:** \`docs/design-synthesis/design-synthesis.md\`
+                - 🏛️ **Architecture Stubs:** \`docs/architecture-stubs/architecture-stubs.md\`
+                - 🧪 **Test Scaffolds:** \`docs/test-scaffolds/test-scaffolds.md\`
+                - 🔗 **Traceability Matrices:** \`docs/traceability-matrices/traceability-matrices.md\`
+                
+                ### What was created:
+                - High-level system architecture and design
+                - Code stubs and configuration templates
+                - Comprehensive testing frameworks
+                - Requirements traceability matrices
+                - Updated \`docs/config.json\` with pipeline metadata
+                
+                ### Next steps:
+                1. Review generated artifacts for accuracy
+                2. Customize design and architecture based on your needs
+                3. Implement test frameworks and scenarios
+                4. Use traceability matrices for compliance verification
+                5. Integrate with your development workflow
+                
+                ---
+                *Generated automatically by Gemini CLI using Vertex AI*
+                `
+              });
+            } 

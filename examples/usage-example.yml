@@ -1,0 +1,82 @@
+# Example workflow showing how to use the Gemini CLI Action
+# Copy this to your repository's .github/workflows/ directory
+
+name: 'Gemini AI Assistant'
+
+on:
+  # Trigger on PR comments mentioning @gemini-cli
+  pull_request_review_comment:
+    types: [created, edited]
+  # Trigger on issue comments mentioning @gemini-cli
+  issue_comment:
+    types: [created, edited]
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'What would you like Gemini to help you with?'
+        required: true
+        default: 'Help me understand this code'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  id-token: write  # Required for Workload Identity Federation
+
+jobs:
+  assist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: 'Get Gemini AI assistance'
+        id: gemini-assist
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a helpful AI coding assistant. The user is asking for help with their code.
+            Please provide clear, actionable advice and code examples when appropriate.
+            
+            User request: ${{ github.event.comment.body if github.event.comment else github.event.inputs.prompt }}
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.3,
+              "max_tokens": 2000
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          
+      - name: 'Respond with AI assistance'
+        if: github.event.comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = '${{ steps.gemini-assist.outputs.summary }}';
+            const commentBody = '${{ github.event.comment.body }}';
+            
+            // Only respond if the comment mentions @gemini-cli
+            if (commentBody.includes('@gemini-cli')) {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🤖 Gemini AI Assistant\n\n${summary}\n\n---\n*Powered by Gemini CLI - Ask me anything with @gemini-cli*`
+              });
+            }
+            
+      - name: 'Display manual trigger results'
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "## 🤖 Gemini AI Response"
+          echo ""
+          echo "${{ steps.gemini-assist.outputs.summary }}"
+          echo ""
+          echo "---"
+          echo "*This response was generated via manual workflow trigger*" 

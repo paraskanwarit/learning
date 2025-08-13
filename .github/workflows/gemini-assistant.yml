@@ -1,0 +1,104 @@
+name: 'Gemini CLI Assistant'
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Custom prompt for Gemini CLI'
+        required: true
+        default: 'You are a helpful AI assistant. Help me with my request.'
+      context:
+        description: 'Context for the request (PR number, issue number, etc.)'
+        required: false
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  id-token: write  # Required for Workload Identity Federation
+
+jobs:
+  assist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: 'Determine context'
+        id: context
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            echo "type=issue" >> $GITHUB_OUTPUT
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            echo "body=${{ github.event.comment.body }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+            echo "type=pr" >> $GITHUB_OUTPUT
+            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "body=${{ github.event.comment.body }}" >> $GITHUB_OUTPUT
+          else
+            echo "type=manual" >> $GITHUB_OUTPUT
+            echo "prompt=${{ github.event.inputs.prompt }}" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: 'Extract Gemini request'
+        id: extract
+        run: |
+          if [ "${{ steps.context.outputs.type }}" = "issue" ] || [ "${{ steps.context.outputs.type }}" = "pr" ]; then
+            # Extract @gemini-cli command from comment
+            body="${{ steps.context.outputs.body }}"
+            if [[ $body =~ @gemini-cli[[:space:]]+(.+) ]]; then
+              prompt="${BASH_REMATCH[1]}"
+              echo "prompt=$prompt" >> $GITHUB_OUTPUT
+            else
+              echo "prompt=You are a helpful AI assistant. Please help with this request." >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "prompt=${{ steps.context.outputs.prompt }}" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: 'Run Gemini CLI'
+        id: gemini-assist
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: ${{ steps.extract.outputs.prompt }}
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.3,
+              "max_tokens": 5000
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          
+      - name: 'Respond to comment'
+        if: steps.context.outputs.type == 'issue' || steps.context.outputs.type == 'pr'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = '${{ steps.gemini-assist.outputs.summary }}';
+            const type = '${{ steps.context.outputs.type }}';
+            const number = '${{ steps.context.outputs.number }}';
+            
+            if (type === 'issue') {
+              await github.rest.issues.createComment({
+                issue_number: parseInt(number),
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🤖 Gemini Assistant Response\n\n${summary}\n\n---\n*Powered by Gemini CLI*`
+              });
+            } else if (type === 'pr') {
+              await github.rest.issues.createComment({
+                issue_number: parseInt(number),
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🤖 Gemini Assistant Response\n\n${summary}\n\n---\n*Powered by Gemini CLI*`
+              });
+            } 

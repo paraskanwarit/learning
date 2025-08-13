@@ -1,0 +1,88 @@
+name: 'Gemini Issue Triage'
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write  # Required for Workload Identity Federation
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        
+      - name: 'Run Gemini Issue Triage'
+        id: gemini-triage
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a senior software engineer triaging GitHub issues. 
+            Analyze this issue and provide:
+            1. Issue categorization (bug, feature request, documentation, etc.)
+            2. Priority assessment (low, medium, high, critical)
+            3. Suggested labels
+            4. Estimated effort/complexity
+            5. Recommended assignee (if applicable)
+            6. Next steps or questions to ask
+            
+            Focus on:
+            - Understanding the user's problem
+            - Reproducibility and context
+            - Impact on users and system
+            - Technical feasibility
+            - Resource requirements
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 3000
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          
+      - name: 'Apply triage results'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = '${{ steps.gemini-triage.outputs.summary }}';
+            
+            // Extract labels and priority from summary
+            const labels = [];
+            const priority = summary.toLowerCase().includes('critical') ? 'critical' :
+                           summary.toLowerCase().includes('high') ? 'high' :
+                           summary.toLowerCase().includes('medium') ? 'medium' : 'low';
+            
+            // Add priority label
+            labels.push(`priority:${priority}`);
+            
+            // Add category labels based on summary
+            if (summary.toLowerCase().includes('bug')) labels.push('bug');
+            if (summary.toLowerCase().includes('feature')) labels.push('enhancement');
+            if (summary.toLowerCase().includes('documentation')) labels.push('documentation');
+            if (summary.toLowerCase().includes('security')) labels.push('security');
+            
+            // Add triage label
+            labels.push('triage:completed');
+            
+            // Apply labels
+            await github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: labels
+            });
+            
+            // Add triage comment
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🤖 Gemini Issue Triage\n\n${summary}\n\n---\n*This triage was automatically performed by Gemini CLI*`
+            }); 

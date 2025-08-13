@@ -1,0 +1,427 @@
+name: 'Requirements Processor'
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to process'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  process-requirements:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 'Install dependencies'
+        run: |
+          pip install PyGithub requests python-dateutil
+          
+      - name: 'Get issue details'
+        id: issue-details
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = '${{ github.event.inputs.issue_number || github.event.issue.number }}';
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(issueNumber)
+            });
+            
+            // Get issue attachments (comments with files)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(issueNumber)
+            });
+            
+            // Extract attachments from comments
+            const attachments = [];
+            for (const comment of comments) {
+              if (comment.body && comment.body.includes('![') && comment.body.includes('](')) {
+                const matches = comment.body.match(/!\[([^\]]*)\]\(([^)]+)\)/g);
+                if (matches) {
+                  for (const match of matches) {
+                    const urlMatch = match.match(/\]\(([^)]+)\)/);
+                    if (urlMatch) {
+                      attachments.push({
+                        type: 'image',
+                        url: urlMatch[1],
+                        description: match.match(/\[([^\]]*)\]/)?.[1] || 'Image attachment'
+                      });
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Create slug from title
+            const slug = issue.title
+              .toLowerCase()
+              .replace(/[^a-z0-9\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .substring(0, 50);
+            
+            return {
+              number: issue.number,
+              title: issue.title,
+              body: issue.body,
+              slug: slug,
+              attachments: JSON.stringify(attachments),
+              labels: JSON.stringify(issue.labels.map(l => l.name)),
+              assignees: JSON.stringify(issue.assignees.map(a => a.login)),
+              created_at: issue.created_at,
+              updated_at: issue.updated_at
+            };
+            
+      - name: 'Create requirements folder structure'
+        run: |
+          ISSUE_NUMBER="${{ steps.issue-details.outputs.number }}"
+          SLUG="${{ steps.issue-details.outputs.slug }}"
+          
+          # Create requirements root if it doesn't exist
+          mkdir -p docs/requirements
+          
+          # Create issue-specific folder
+          ISSUE_FOLDER="docs/requirements/ISSUE-${ISSUE_NUMBER}-${SLUG}"
+          mkdir -p "$ISSUE_FOLDER"
+          
+          # Create subfolders for different requirement types
+          mkdir -p "$ISSUE_FOLDER/functional"
+          mkdir -p "$ISSUE_FOLDER/non-functional"
+          mkdir -p "$ISSUE_FOLDER/constraints"
+          mkdir -p "$ISSUE_FOLDER/attachments"
+          
+          echo "ISSUE_FOLDER=$ISSUE_FOLDER" >> $GITHUB_ENV
+          
+      - name: 'Process requirements with Gemini CLI (Vertex AI)'
+        id: gemini-processing
+        uses: google-github-actions/run-gemini-cli@v0.1.10
+        with:
+          prompt: |
+            You are a requirements engineering expert. Analyze this GitHub issue and decompose it into atomic, traceable requirements.
+            
+            Issue Title: ${{ steps.issue-details.outputs.title }}
+            Issue Body: ${{ steps.issue-details.outputs.body }}
+            Labels: ${{ steps.issue-details.outputs.labels }}
+            Attachments: ${{ steps.issue-details.outputs.attachments }}
+            
+            Please provide a structured analysis in JSON format with the following structure:
+            {
+              "issue_summary": "Brief summary of the issue",
+              "requirements": [
+                {
+                  "id": "RQ-ISSUE-${{ steps.issue-details.outputs.number }}-001",
+                  "type": "functional|non-functional|constraint",
+                  "title": "Requirement title",
+                  "description": "Detailed requirement description",
+                  "acceptance_criteria": ["criterion1", "criterion2"],
+                  "priority": "high|medium|low",
+                  "complexity": "simple|moderate|complex",
+                  "dependencies": ["dependency1", "dependency2"],
+                  "stakeholders": ["stakeholder1", "stakeholder2"],
+                  "tags": ["tag1", "tag2"],
+                  "notes": "Additional context or notes"
+                }
+              ],
+              "metadata": {
+                "domain": "business domain",
+                "regulatory_requirements": ["req1", "req2"],
+                "impact_analysis": "high|medium|low",
+                "traceability_links": ["link1", "link2"]
+              }
+            }
+            
+            Ensure each requirement is:
+            1. Atomic and testable
+            2. Clearly defined with acceptance criteria
+            3. Properly categorized and prioritized
+            4. Linked to relevant stakeholders and dependencies
+          settings: |
+            {
+              "model": "gemini-1.5-pro",
+              "temperature": 0.1,
+              "max_tokens": 8000,
+              "use_vertex_ai": true
+            }
+          gcp_project_id: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+          gcp_location: ${{ vars.GOOGLE_CLOUD_LOCATION }}
+          gcp_workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          gcp_service_account: ${{ vars.SERVICE_ACCOUNT_EMAIL }}
+          use_vertex_ai: true
+          
+      - name: 'Parse Gemini output and generate files'
+        id: file-generation
+        run: |
+          # Parse the Gemini output
+          GEMINI_OUTPUT='${{ steps.gemini-processing.outputs.summary }}'
+          
+          # Try to extract JSON from the output
+          if [[ $GEMINI_OUTPUT =~ \{.*\} ]]; then
+            JSON_DATA="${BASH_REMATCH[0]}"
+            echo "$JSON_DATA" > "$ISSUE_FOLDER/requirements-analysis.json"
+          else
+            echo "Error: Could not extract JSON from Gemini output"
+            exit 1
+          fi
+          
+          # Generate individual requirement markdown files
+          python -c "
+          import json
+          import os
+          
+          try:
+              data = json.loads('''$JSON_DATA''')
+              issue_folder = '$ISSUE_FOLDER'
+              
+              # Create README for the issue
+              readme_content = f'''# Issue {data.get('issue_summary', 'Requirements')}
+              
+              **Issue Number:** ${{ steps.issue-details.outputs.number }}
+              **Title:** ${{ steps.issue-details.outputs.title }}
+              **Created:** ${{ steps.issue-details.outputs.created_at }}
+              **Updated:** ${{ steps.issue-details.outputs.updated_at }}
+              
+              ## Summary
+              {data.get('issue_summary', 'No summary provided')}
+              
+              ## Requirements Overview
+              This issue contains {len(data.get('requirements', []))} requirements:
+              
+              '''
+              
+              for req in data.get('requirements', []):
+                  req_id = req.get('id', 'UNKNOWN')
+                  readme_content += f'- [{req_id}]({req_id}.md) - {req.get('title', 'Untitled')}\n'
+              
+              readme_content += '''
+              
+              ## Metadata
+              - **Domain:** ''' + data.get('metadata', {}).get('domain', 'Not specified') + '''
+              - **Impact:** ''' + data.get('metadata', {}).get('impact_analysis', 'Not specified') + '''
+              - **Regulatory:** ''' + ', '.join(data.get('metadata', {}).get('regulatory_requirements', [])) + '''
+              
+              ---
+              *Generated automatically by Gemini CLI Requirements Processor (Vertex AI)*
+              '''
+              
+              with open(f'{issue_folder}/README.md', 'w') as f:
+                  f.write(readme_content)
+              
+              # Generate individual requirement files
+              for req in data.get('requirements', []):
+                  req_id = req.get('id', 'UNKNOWN')
+                  req_type = req.get('type', 'unknown')
+                  
+                  # Determine folder based on type
+                  if req_type == 'functional':
+                      folder = f'{issue_folder}/functional'
+                  elif req_type == 'non-functional':
+                      folder = f'{issue_folder}/non-functional'
+                  elif req_type == 'constraint':
+                      folder = f'{issue_folder}/constraints'
+                  else:
+                      folder = issue_folder
+                  
+                  # Create requirement markdown file
+                  req_content = f'''# {req_id}: {req.get('title', 'Untitled Requirement')}
+                  
+                  **Type:** {req.get('type', 'Unknown')}
+                  **Priority:** {req.get('priority', 'Not specified')}
+                  **Complexity:** {req.get('complexity', 'Not specified')}
+                  
+                  ## Description
+                  {req.get('description', 'No description provided')}
+                  
+                  ## Acceptance Criteria
+                  '''
+                  
+                  for criterion in req.get('acceptance_criteria', []):
+                      req_content += f'- [ ] {criterion}\n'
+                  
+                  req_content += f'''
+                  
+                  ## Dependencies
+                  '''
+                  
+                  for dep in req.get('dependencies', []):
+                      req_content += f'- {dep}\n'
+                  
+                  req_content += f'''
+                  
+                  ## Stakeholders
+                  '''
+                  
+                  for stakeholder in req.get('stakeholders', []):
+                      req_content += f'- {stakeholder}\n'
+                  
+                  req_content += f'''
+                  
+                  ## Tags
+                  '''
+                  
+                  for tag in req.get('tags', []):
+                      req_content += f'`{tag}` '
+                  
+                  req_content += f'''
+                  
+                  ## Notes
+                  {req.get('notes', 'No additional notes')}
+                  
+                  ---
+                  *Generated automatically by Gemini CLI Requirements Processor (Vertex AI)*
+                  '''
+                  
+                  with open(f'{folder}/{req_id}.md', 'w') as f:
+                      f.write(req_content)
+                  
+                  print(f'Generated: {folder}/{req_id}.md')
+              
+              print(f'Successfully generated {len(data.get('requirements', []))} requirement files')
+              
+          except Exception as e:
+              print(f'Error processing requirements: {e}')
+              exit(1)
+          "
+          
+      - name: 'Update configuration file'
+        id: config-update
+        run: |
+          # Create or update docs/config.json
+          CONFIG_FILE="docs/config.json"
+          
+          if [ ! -f "$CONFIG_FILE" ]; then
+              # Create new config file
+              cat > "$CONFIG_FILE" << EOF
+          {
+            "requirements": {
+              "root": "docs/requirements",
+              "folders": [],
+              "last_updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+          }
+          EOF
+          fi
+          
+          # Update config with new folder
+          python -c "
+          import json
+          import os
+          
+          config_file = 'docs/config.json'
+          issue_folder = '$ISSUE_FOLDER'
+          issue_number = '${{ steps.issue-details.outputs.number }}'
+          issue_title = '${{ steps.issue-details.outputs.title }}'
+          
+          # Read existing config
+          with open(config_file, 'r') as f:
+              config = json.load(f)
+          
+          # Add new folder if not exists
+          folder_info = {
+              'path': issue_folder,
+              'issue_number': int(issue_number),
+              'title': issue_title,
+              'created': '${{ steps.issue-details.outputs.created_at }}',
+              'updated': '${{ steps.issue-details.outputs.updated_at }}',
+              'requirements_count': len(json.loads('''$JSON_DATA''').get('requirements', [])),
+              'slug': '${{ steps.issue-details.outputs.slug }}'
+          }
+          
+          # Check if folder already exists
+          existing_folders = config['requirements']['folders']
+          folder_exists = False
+          
+          for folder in existing_folders:
+              if folder['issue_number'] == int(issue_number):
+                  folder.update(folder_info)
+                  folder_exists = True
+                  break
+          
+          if not folder_exists:
+              existing_folders.append(folder_info)
+          
+          # Update timestamp
+          config['requirements']['last_updated'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          
+          # Write updated config
+          with open(config_file, 'w') as f:
+              json.dump(config, f, indent=2)
+          
+          print(f'Updated config with folder: {issue_folder}')
+          "
+          
+      - name: 'Commit and push changes'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add .
+          git commit -m "Process requirements for Issue #${{ steps.issue-details.outputs.number }}: ${{ steps.issue-details.outputs.title }}"
+          git push
+          
+      - name: 'Create summary comment'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            // Check if we already commented
+            const hasCommented = comments.some(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('🤖 Gemini Requirements Processing Complete')
+            );
+            
+            if (!hasCommented) {
+              const summary = '${{ steps.gemini-processing.outputs.summary }}';
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🤖 Gemini Requirements Processing Complete (Vertex AI)
+                
+                **Issue:** #${{ steps.issue-details.outputs.number }}
+                **Requirements Generated:** ${{ steps.file-generation.outputs.requirements_count || 'Unknown' }}
+                **Output Location:** \`${{ env.ISSUE_FOLDER }}\`
+                
+                ### What was created:
+                - 📁 **Issue folder:** \`${{ env.ISSUE_FOLDER }}\`
+                - 📝 **README:** Overview and navigation
+                - 📋 **Requirement files:** Individual markdown files for each requirement
+                - ⚙️ **Configuration:** Updated \`docs/config.json\`
+                
+                ### Next steps:
+                1. Review the generated requirements in \`${{ env.ISSUE_FOLDER }}\`
+                2. Validate requirement completeness and accuracy
+                3. Update acceptance criteria as needed
+                4. Link to related design and test artifacts
+                
+                ---
+                *Processed automatically by Gemini CLI Requirements Processor using Vertex AI*
+                `
+              });
+            } 

@@ -1,0 +1,135 @@
+{
+  "model": "gemini-1.5-pro",
+  "temperature": 0.1,
+  "max_tokens": 8000,
+  "use_vertex_ai": true,
+  "gcp_project_id": "extreme-gecko-466211-t1",
+  "gcp_location": "us-central1",
+  "mcp_servers": {
+    "domain_ontology": {
+      "name": "Domain Ontology Service",
+      "description": "Provides business domain mapping and vocabulary services",
+      "endpoint": "https://your-domain-service.com/api",
+      "enabled": true,
+      "config": {
+        "timeout": 30,
+        "retry_attempts": 3,
+        "authentication": "bearer_token"
+      }
+    },
+    "regulatory_compliance": {
+      "name": "Regulatory Compliance Service",
+      "description": "Identifies applicable regulations and compliance requirements",
+      "endpoint": "https://your-compliance-service.com/api",
+      "enabled": true,
+      "config": {
+        "timeout": 45,
+        "retry_attempts": 3,
+        "authentication": "api_key"
+      }
+    },
+    "traceability_engine": {
+      "name": "Traceability Engine",
+      "description": "Manages requirement traceability and cross-references",
+      "endpoint": "https://your-traceability-service.com/api",
+      "enabled": true,
+      "config": {
+        "timeout": 30,
+        "retry_attempts": 3,
+        "authentication": "oauth2"
+      }
+    },
+    "impact_analyzer": {
+      "name": "Impact Analysis Service",
+      "description": "Assesses business and technical impact of requirements",
+      "endpoint": "https://your-impact-service.com/api",
+      "enabled": true,
+      "config": {
+        "timeout": 60,
+        "retry_attempts": 3,
+        "authentication": "bearer_token"
+      }
+    }
+  },
+  "requirements_processing": {
+    "auto_categorization": true,
+    "priority_assignment": true,
+    "complexity_estimation": true,
+    "stakeholder_identification": true,
+    "dependency_detection": true,
+    "acceptance_criteria_generation": true
+  },
+  "enrichment": {
+    "domain_ontology": {
+      "enabled": true,
+      "depth": "comprehensive",
+      "include_vocabulary": true,
+      "include_entities": true,
+      "include_processes": true
+    },
+    "regulatory_analysis": {
+      "enabled": true,
+      "jurisdictions": ["global", "eu", "us", "uk"],
+      "compliance_frameworks": ["gdpr", "sox", "iso27001"],
+      "risk_assessment": true
+    },
+    "traceability": {
+      "enabled": true,
+      "upstream_tracking": true,
+      "downstream_tracking": true,
+      "cross_references": true,
+      "relationship_types": ["depends_on", "implements", "conflicts_with"]
+    },
+    "impact_analysis": {
+      "enabled": true,
+      "business_impact": true,
+      "technical_impact": true,
+      "resource_impact": true,
+      "risk_assessment": true
+    }
+  },
+  "output_formats": {
+    "markdown": {
+      "enabled": true,
+      "template": "standard",
+      "include_metadata": true,
+      "include_enrichment": true
+    },
+    "json": {
+      "enabled": true,
+      "pretty_print": true,
+      "include_raw_data": false
+    },
+    "html": {
+      "enabled": false,
+      "template": "bootstrap",
+      "include_styling": true
+    }
+  },
+  "file_organization": {
+    "folder_structure": "hierarchical",
+    "naming_convention": "ISSUE-{number}-{slug}",
+    "requirement_files": "individual",
+    "metadata_files": "centralized",
+    "enrichment_files": "separate"
+  },
+  "integration": {
+    "github_actions": {
+      "enabled": true,
+      "auto_commit": true,
+      "branch_protection": true,
+      "review_required": false
+    },
+    "external_services": {
+      "webhook_notifications": true,
+      "api_integrations": true,
+      "monitoring": true
+    },
+    "vertex_ai": {
+      "enabled": true,
+      "project_id": "extreme-gecko-466211-t1",
+      "location": "us-central1",
+      "model": "gemini-1.5-pro"
+    }
+  }
+} 
